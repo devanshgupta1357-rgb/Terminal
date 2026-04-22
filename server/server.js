@@ -14,9 +14,18 @@ const Report = require('./models/Report');
 
 const app = express();
 
+// --- DEPLOYMENT UPDATE: Dynamic CORS ---
+// This allows your live Vercel frontend AND your local Vite server to connect securely.
+// The .filter(Boolean) part prevents errors if CLIENT_URL is empty while you are testing.
+const allowedOrigins = [
+  process.env.CLIENT_URL, 
+  "http://localhost:5173", 
+  "http://127.0.0.1:5173"
+].filter(Boolean);
+
 // Single, unified CORS policy
 app.use(cors({
-  origin: ["http://localhost:5173", "http://127.0.0.1:5173"], 
+  origin: allowedOrigins, 
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
@@ -24,9 +33,13 @@ app.use(cors({
 app.use(express.json()); 
 const server = http.createServer(app);
 
-// Set up real-time WebSockets
+// Set up real-time WebSockets with updated CORS
 const io = new Server(server, {
-  cors: { origin: ['http://localhost:5173', 'http://127.0.0.1:5173'], methods: ['GET', 'POST'] }
+  cors: { 
+    origin: allowedOrigins, 
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
 });
 
 // Connect to MongoDB

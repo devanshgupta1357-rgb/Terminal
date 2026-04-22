@@ -4,8 +4,8 @@ import axios from "axios";
 import { io } from "socket.io-client";
 
 // --- COMM LINKS ---
-const API_URL = "http://127.0.0.1:5000/api";
-const socket = io("http://127.0.0.1:5000", { autoConnect: false });
+const API_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
+const socket = io(API_URL);
 
 // --- CONSTANTS & GENERATORS ---
 const ADMIN_ID   = "bt25csd064";
