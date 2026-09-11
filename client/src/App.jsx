@@ -75,6 +75,8 @@ export default function App() {
   const [inp, setInp] = useState("");
   const [tab, setTab] = useState("chat");
   const [now, setNow] = useState(Date.now());
+  const [typing, setTyping] = useState([]);
+  const typingTimeout = useRef(null);
 
   // Admin Data States
   const [reports, setReports] = useState([]);
@@ -101,6 +103,14 @@ export default function App() {
     socket.on("load_messages", (pastMessages) => setMsgs(pastMessages));
     socket.on("receive_message", (m) => setMsgs((p) => [...p, m]));
     socket.on("clear_all_messages", () => setMsgs([]));
+
+    socket.on("user_typing", (data) => {
+      setTyping(p => {
+        if (!p.includes(data.ghost) && data.isTyping) return [...p, data.ghost];
+        if (!data.isTyping) return p.filter(g => g !== data.ghost);
+        return p;
+      });
+    });
 
     socket.on("admin_data", (data) => {
       setReports(data.reports);
@@ -131,6 +141,7 @@ export default function App() {
       socket.off("system_state"); socket.off("load_messages"); socket.off("receive_message");
       socket.off("clear_all_messages"); socket.off("admin_data"); socket.off("new_report");
       socket.off("blocked_list_updated"); socket.off("force_logout_all"); socket.off("kick_banned_user");
+      socket.off("user_typing");
     };
   }, []);
 
@@ -157,6 +168,7 @@ export default function App() {
               setMuted(response.data.sysState.isMuted); setLocked(response.data.sysState.isLocked);
             }
             socket.connect();
+            socket.emit('identify', response.data.user.ghost);
             if (response.data.user.isAdmin) {
               socket.emit('request_admin_data', response.data.user.id);
             }
@@ -172,10 +184,23 @@ export default function App() {
     }
   }
 
+  function handleInpChange(e) {
+    setInp(e.target.value);
+    if (!user || (!user.isAdmin && muted)) return;
+    
+    socket.emit("typing", { ghost: user.ghost, isTyping: true });
+    clearTimeout(typingTimeout.current);
+    typingTimeout.current = setTimeout(() => {
+      socket.emit("typing", { ghost: user.ghost, isTyping: false });
+    }, 2500);
+  }
+
   function send() {
     if (!inp.trim() || !user || (!user.isAdmin && muted)) return;
     socket.emit("send_message", { text: inp.trim(), btId: user.id, ghost: user.ghost });
     setInp("");
+    socket.emit("typing", { ghost: user.ghost, isTyping: false });
+    clearTimeout(typingTimeout.current);
   }
 
   function submitReport() {
@@ -406,6 +431,11 @@ export default function App() {
                 </div>
               );
             })}
+            {typing.length > 0 && (
+              <div style={{ fontSize: 11, color: "#00bb2d", paddingTop: 10, fontStyle: "italic", letterSpacing: "0.1em" }}>
+                ◈ [{typing[0]}] {typing.length > 1 ? `AND +${typing.length - 1} OTHER(S) ARE TRANSMITTING...` : "IS TRANSMITTING..."}
+              </div>
+            )}
             <div ref={endRef} />
           </div>
           <div style={{ position: "relative", zIndex: 10, display: "flex", alignItems: "center", gap: "8px", padding: "12px 16px", flexShrink: 0, borderTop: "1px solid #001a07", background: "#000" }}>
@@ -413,7 +443,7 @@ export default function App() {
             {!user.isAdmin && muted
               ? <div style={{ flex: 1, fontSize: 13, color: "#ff8800", letterSpacing: "0.1em" }}>⊘ CHANNEL MUTED BY ADMIN</div>
               : <input autoFocus style={{ flex: 1, background: "transparent", border: "none", color: G, fontSize: 14, outline: "none", fontFamily: "'Courier New',monospace" }}
-                placeholder="TRANSMIT MESSAGE..." value={inp} onChange={e => setInp(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} />
+                placeholder="TRANSMIT MESSAGE..." value={inp} onChange={handleInpChange} onKeyDown={e => e.key === "Enter" && send()} />
             }
             <button onClick={send} disabled={!user.isAdmin && muted} style={{ fontSize: 12, padding: "5px 14px", cursor: (!user.isAdmin && muted) ? "not-allowed" : "pointer", background: "#001a07", border: `1px solid ${DG}`, color: MG }}>TX</button>
           </div>

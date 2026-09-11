@@ -103,6 +103,23 @@ io.on('connection', async (socket) => {
   const recentMessages = await Message.find().sort({ sentAt: 1 }).limit(50);
   socket.emit('load_messages', recentMessages);
 
+  // --- JOIN / LEAVE LOGIC ---
+  socket.on('identify', (ghost) => {
+    socket.ghostName = ghost;
+    io.emit('receive_message', { system: true, color: "#00bb2d", text: `[${ghost}] CONNECTED TO NODE` });
+  });
+
+  socket.on('disconnect', () => {
+    if (socket.ghostName) {
+      io.emit('receive_message', { system: true, color: "#993300", text: `[${socket.ghostName}] NODE DISCONNECTED` });
+    }
+  });
+
+  // --- TYPING INDICATOR ---
+  socket.on('typing', (data) => {
+    socket.broadcast.emit('user_typing', data); 
+  });
+
   // Listen for new messages
   socket.on('send_message', async (data) => {
     const currentState = await SystemState.findOne();
