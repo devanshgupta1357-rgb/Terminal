@@ -251,7 +251,7 @@ export default function App() {
 
   /* ─── MAP SCREEN ─── */
   if (scr === "map") return (
-    <div style={{ position: "relative", minHeight: "100vh", backgroundColor: "#000", overflow: "hidden", fontFamily: "'Courier New',monospace", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+    <div style={{ position: "relative", minHeight: "100dvh", backgroundColor: "#000", overflow: "hidden", fontFamily: "'Courier New',monospace", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px" }}>
       <div style={{ ...SCAN, position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 40 }} />
       {showDisclaimer && <DisclaimerModal />}
       {err && <div style={{ position: "absolute", top: "16px", width: "100%", textAlign: "center", color: "#ff4444", fontWeight: "bold", zIndex: 50 }}>⚠ {err}</div>}
@@ -285,7 +285,7 @@ export default function App() {
 
   /* ─── LOGIN SCREEN ─── */
   if (scr === "login") return (
-    <div style={{ position: "relative", minHeight: "100vh", backgroundColor: "#000", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px", overflow: "hidden", fontFamily: "'Courier New',monospace" }}>
+    <div style={{ position: "relative", minHeight: "100dvh", backgroundColor: "#000", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px", overflow: "hidden", fontFamily: "'Courier New',monospace" }}>
       <div style={{ ...SCAN, position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 40 }} />
       <div style={{ position: "relative", zIndex: 10, width: "100%", maxWidth: "384px", padding: "32px", background: "#000", border: "1px solid #00661a", boxShadow: GLOW, color: G }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
@@ -322,7 +322,7 @@ export default function App() {
 
   /* ─── MAIN TERMINAL ─── */
   if (scr === "chat" && user) return (
-    <div style={{ position: "relative", display: "flex", flexDirection: "column", backgroundColor: "#000", overflow: "hidden", height: "100vh", fontFamily: "'Courier New',monospace", color: G }}>
+    <div style={{ position: "relative", display: "flex", flexDirection: "column", backgroundColor: "#000", overflow: "hidden", height: "100dvh", fontFamily: "'Courier New',monospace", color: G }}>
       <div style={{ ...SCAN, position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 40 }} />
 
       {/* Report Modal */}
