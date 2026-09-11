@@ -390,21 +390,17 @@ export default function App() {
               const fading = secs <= 10;
               if (secs <= 0) return null;
 
-              const isOwn = m.btId === user.id;
-
               return (
-                <div key={m._id || m.id || Math.random()} style={{ display: "flex", justifyContent: isOwn ? "flex-start" : "flex-end", padding: "6px 0", opacity: fading ? 0.4 + 0.6 * (secs / 10) : 1, transition: "opacity 0.5s", borderBottom: "1px solid #000c04" }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 8, flexDirection: isOwn ? "row" : "row-reverse", maxWidth: "85%" }}>
-                    <div style={{ flex: 1, minWidth: 0, lineHeight: 1.8, textAlign: isOwn ? "left" : "right" }}>
-                      <span style={{ fontSize: 13, fontWeight: "bold", marginRight: isOwn ? 8 : 0, marginLeft: isOwn ? 0 : 8, color: m.ghost === "SUDO_MASTER" ? "#ffd700" : G }}>[{m.ghost}]</span>
-                      <span style={{ fontSize: 14, color: "#ccffdd", wordBreak: "break-word" }}>{m.text}</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, paddingTop: 3, flexDirection: isOwn ? "row" : "row-reverse" }}>
-                      <span style={{ fontSize: 10, color: fading ? "#cc2200" : "#00bb2d", minWidth: 26, textAlign: isOwn ? "right" : "left" }}>{secs}s</span>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        {m.btId !== user.id && <button onClick={() => setReportModal({ msg: m })} style={{ background: "none", border: "none", cursor: "pointer", color: DG, padding: 0 }}><Flag size={13} /></button>}
-                        {user.isAdmin && m.btId !== ADMIN_ID && <button onClick={() => toggleBlockUser(m.btId, true)} style={{ background: "none", border: "none", cursor: "pointer", color: DG, padding: 0 }}><UserX size={13} /></button>}
-                      </div>
+                <div key={m._id || m.id || Math.random()} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "5px 0", opacity: fading ? 0.4 + 0.6 * (secs / 10) : 1, transition: "opacity 0.5s", borderBottom: "1px solid #000c04" }}>
+                  <div style={{ flex: 1, minWidth: 0, lineHeight: 1.8 }}>
+                    <span style={{ fontSize: 13, fontWeight: "bold", marginRight: 8, color: m.ghost === "SUDO_MASTER" ? "#ffd700" : G }}>[{m.ghost}]</span>
+                    <span style={{ fontSize: 14, color: "#ccffdd", wordBreak: "break-word" }}>{m.text}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, paddingTop: 3 }}>
+                    <span style={{ fontSize: 10, color: fading ? "#cc2200" : "#00bb2d", minWidth: 26, textAlign: "right" }}>{secs}s</span>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {m.btId !== user.id && <button onClick={() => setReportModal({ msg: m })} style={{ background: "none", border: "none", cursor: "pointer", color: DG, padding: 0 }}><Flag size={13} /></button>}
+                      {user.isAdmin && m.btId !== ADMIN_ID && <button onClick={() => toggleBlockUser(m.btId, true)} style={{ background: "none", border: "none", cursor: "pointer", color: DG, padding: 0 }}><UserX size={13} /></button>}
                     </div>
                   </div>
                 </div>
