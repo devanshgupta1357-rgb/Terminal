@@ -67,6 +67,8 @@ const ghostTag = (id) => {
 };
 
 // --- API ROUTES ---
+app.get('/ping', (req, res) => res.status(200).send('pong'));
+
 app.post('/api/login', async (req, res) => {
   const { id, pw } = req.body;
   const cleanId = id.toLowerCase().trim();
@@ -188,4 +190,15 @@ io.on('connection', async (socket) => {
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+  
+  // --- RENDER KEEP-ALIVE ---
+  // Pings itself every 14 minutes to prevent Render free tier from sleeping
+  const SELF_URL = process.env.RENDER_EXTERNAL_URL;
+  if (SELF_URL) {
+    setInterval(() => {
+      fetch(`${SELF_URL}/ping`)
+        .then(res => console.log(`[KEEP-ALIVE] Pinged self at ${new Date().toISOString()} - Status: ${res.status}`))
+        .catch(err => console.error('[KEEP-ALIVE] Error pinging self:', err.message));
+    }, 14 * 60 * 1000); // 14 mins
+  }
 });
