@@ -11,6 +11,8 @@ const Message = require('./models/Message');
 const BlockedUser = require('./models/BlockedUser');
 const SystemState = require('./models/SystemState');
 const Report = require('./models/Report'); 
+const Operator = require('./models/Operator');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 
@@ -74,7 +76,17 @@ app.post('/api/login', async (req, res) => {
   const cleanId = id.toLowerCase().trim();
 
   if (!isValid(cleanId)) return res.status(400).json({ error: "ACCESS DENIED — INVALID OPERATOR ID" });
-  if (pw !== mkPass(cleanId)) return res.status(401).json({ error: "ACCESS DENIED — WRONG PASSKEY" });
+
+  let valid = false;
+  const sysUser = await Operator.findOne({ btId: cleanId });
+
+  if (sysUser) {
+    valid = await bcrypt.compare(pw, sysUser.password);
+  } else {
+    valid = (pw === mkPass(cleanId));
+  }
+
+  if (!valid) return res.status(401).json({ error: "ACCESS DENIED — WRONG PASSKEY" });
 
   const isBlocked = await BlockedUser.findOne({ btId: cleanId });
   if (isBlocked) return res.status(403).json({ error: "ACCESS BLOCKED — OPERATOR BANNED BY ADMIN" });
@@ -95,6 +107,44 @@ app.post('/api/login', async (req, res) => {
   });
 });
 
+app.post('/api/change-password', async (req, res) => {
+  try {
+    const { id, currentPw, newPw } = req.body;
+    const cleanId = id.toLowerCase().trim();
+
+    if (!isValid(cleanId)) return res.status(400).json({ error: "INVALID OPERATOR ID" });
+    if (!newPw || newPw.length < 6) return res.status(400).json({ error: "NEW PASSKEY MUST BE AT LEAST 6 CHARACTERS" });
+    if (newPw === mkPass(cleanId)) return res.status(400).json({ error: "CANNOT USE DEFAULT PASSKEY" });
+
+    const sysUser = await Operator.findOne({ btId: cleanId });
+    let isMatch = false;
+
+    if (sysUser) {
+      isMatch = await bcrypt.compare(currentPw, sysUser.password);
+    } else {
+      isMatch = (currentPw === mkPass(cleanId));
+    }
+
+    if (!isMatch) return res.status(401).json({ error: "CURRENT PASSKEY INCORRECT" });
+
+    const hashedNew = await bcrypt.hash(newPw, 10);
+
+    if (sysUser) {
+      sysUser.password = hashedNew;
+      await sysUser.save();
+    } else {
+      await Operator.create({ btId: cleanId, password: hashedNew });
+    }
+
+    res.json({ message: "PASSKEY UPDATED SECURELY" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "SERVER SECURE FAULT" });
+  }
+});
+
+const onlineSockets = new Map();
+
 // --- REAL-TIME CHAT LOGIC ---
 io.on('connection', async (socket) => {
   const sysState = await SystemState.findOne() || await SystemState.create({});
@@ -104,14 +154,21 @@ io.on('connection', async (socket) => {
   socket.emit('load_messages', recentMessages);
 
   // --- JOIN / LEAVE LOGIC ---
-  socket.on('identify', (ghost) => {
-    socket.ghostName = ghost;
-    io.emit('receive_message', { system: true, color: "#00bb2d", text: `[${ghost}] CONNECTED TO NODE` });
+  socket.on('identify', (data) => {
+    const isObj = typeof data === 'object';
+    socket.ghostName = isObj ? data.ghost : data;
+    socket.btId = isObj ? data.btId : null;
+    if (socket.btId) onlineSockets.set(socket.id, socket.btId);
+
+    io.emit('receive_message', { system: true, color: "#00bb2d", text: `[${socket.ghostName}] CONNECTED TO NODE` });
+    io.emit('active_users', Array.from(new Set(onlineSockets.values())));
   });
 
   socket.on('disconnect', () => {
     if (socket.ghostName) {
+      onlineSockets.delete(socket.id);
       io.emit('receive_message', { system: true, color: "#993300", text: `[${socket.ghostName}] NODE DISCONNECTED` });
+      io.emit('active_users', Array.from(new Set(onlineSockets.values())));
     }
   });
 

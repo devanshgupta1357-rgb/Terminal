@@ -77,11 +77,14 @@ export default function App() {
   const [now, setNow] = useState(Date.now());
   const [typing, setTyping] = useState([]);
   const typingTimeout = useRef(null);
+  const [activeUsers, setActiveUsers] = useState([]);
 
   // Admin Data States
   const [reports, setReports] = useState([]);
   const [blocked, setBlocked] = useState([]);
   const [reportModal, setReportModal] = useState(null);
+  const [passModal, setPassModal] = useState(false);
+  const [passData, setPassData] = useState({ current: "", newPass: "", confirm: "", err: "", success: "" });
   const [reportReason, setReportReason] = useState("");
   const [revealedIds, setRevealedIds] = useState({});
 
@@ -112,6 +115,8 @@ export default function App() {
       });
     });
 
+    socket.on("active_users", (users) => setActiveUsers(users));
+
     socket.on("admin_data", (data) => {
       setReports(data.reports);
       setBlocked(data.blockedIds);
@@ -141,7 +146,7 @@ export default function App() {
       socket.off("system_state"); socket.off("load_messages"); socket.off("receive_message");
       socket.off("clear_all_messages"); socket.off("admin_data"); socket.off("new_report");
       socket.off("blocked_list_updated"); socket.off("force_logout_all"); socket.off("kick_banned_user");
-      socket.off("user_typing");
+      socket.off("user_typing"); socket.off("active_users");
     };
   }, []);
 
@@ -168,7 +173,7 @@ export default function App() {
               setMuted(response.data.sysState.isMuted); setLocked(response.data.sysState.isLocked);
             }
             socket.connect();
-            socket.emit('identify', response.data.user.ghost);
+            socket.emit('identify', { ghost: response.data.user.ghost, btId: response.data.user.id });
             if (response.data.user.isAdmin) {
               socket.emit('request_admin_data', response.data.user.id);
             }
@@ -221,6 +226,27 @@ export default function App() {
   function logout() {
     setUser(null); setScr("map"); setTab("chat"); setCreds({ id: "", pw: "" }); setErr("");
     socket.disconnect();
+  }
+
+  async function updatePass() {
+    setPassData(p => ({ ...p, err: "", success: "" }));
+    if (!passData.current || !passData.newPass) return setPassData(p => ({ ...p, err: "FILL ALL FIELDS" }));
+    if (passData.newPass !== passData.confirm) return setPassData(p => ({ ...p, err: "NEW PASSKEYS DO NOT MATCH" }));
+    if (passData.newPass.length < 6) return setPassData(p => ({ ...p, err: "PASSKEY MUST BE AT LEAST 6 CHARACTERS" }));
+
+    try {
+      const res = await axios.post(`${API_URL}/api/change-password`, {
+        id: user.id, currentPw: passData.current, newPw: passData.newPass
+      });
+      setPassData({ current: "", newPass: "", confirm: "", err: "", success: res.data.message });
+      setTimeout(() => {
+        setPassModal(false);
+        setPassData({ current: "", newPass: "", confirm: "", err: "", success: "" });
+      }, 1500);
+    } catch (e) {
+      if (e.response?.data) setPassData(p => ({ ...p, err: e.response.data.error }));
+      else setPassData(p => ({ ...p, err: "NETWORK FAULT" }));
+    }
   }
 
   const sendAdminCmd = (action) => socket.emit('admin_command', { adminId: user.id, action });
@@ -371,6 +397,32 @@ export default function App() {
         </div>
       )}
 
+      {/* Passkey Modal */}
+      {passModal && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", background: "rgba(0,0,0,0.88)" }}>
+          <div style={{ width: 320, background: "#000", border: "1px solid #00bb2d", boxShadow: "0 0 20px rgba(0,255,65,0.2)", padding: 26, color: G }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: "bold", color: "#00bb2d", letterSpacing: "0.1em" }}><Lock size={15} /> UPDATE PASSKEY</div>
+              <button onClick={() => setPassModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: DG }}><X size={15} /></button>
+            </div>
+            
+            <div style={{ fontSize: 11, color: MG, marginBottom: 4 }}>CURRENT PASSKEY</div>
+            <input type="password" style={{ ...inp_s, marginBottom: 12 }} value={passData.current} onChange={e => setPassData(p => ({ ...p, current: e.target.value }))} />
+            
+            <div style={{ fontSize: 11, color: MG, marginBottom: 4 }}>NEW PASSKEY</div>
+            <input type="password" style={{ ...inp_s, marginBottom: 12 }} value={passData.newPass} onChange={e => setPassData(p => ({ ...p, newPass: e.target.value }))} />
+            
+            <div style={{ fontSize: 11, color: MG, marginBottom: 4 }}>CONFIRM NEW PASSKEY</div>
+            <input type="password" style={{ ...inp_s, marginBottom: 16 }} value={passData.confirm} onChange={e => setPassData(p => ({ ...p, confirm: e.target.value }))} onKeyDown={e => e.key === "Enter" && updatePass()} />
+            
+            {passData.err && <div style={{ fontSize: 11, color: "#ff4444", marginBottom: 12, fontWeight: "bold" }}>⚠ {passData.err}</div>}
+            {passData.success && <div style={{ fontSize: 11, color: "#00bb2d", marginBottom: 12, fontWeight: "bold" }}>{passData.success}</div>}
+            
+            <button onClick={updatePass} style={{ ...btn_p, width: "100%", padding: "10px 0" }}>CONFIRM UPDATE</button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ position: "relative", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px", flexShrink: 0, borderBottom: "1px solid #001a07", background: "#000" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -379,8 +431,14 @@ export default function App() {
           {locked && <span style={{ fontSize: 10, color: "#ff4444", border: "1px solid #550000", padding: "1px 6px" }}>LOCKED</span>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {user.isAdmin && (
+             <span style={{ fontSize: 11, color: "#00bb2d", display: "flex", alignItems: "center", gap: 4 }}>
+               <Zap size={12} /> {activeUsers.length} ONLINE
+             </span>
+          )}
           <span style={{ fontSize: 11, color: user.ghost === "SUDO_MASTER" ? "#ffd700" : G, fontWeight: "bold" }}>[{user.ghost}]</span>
-          <button onClick={logout} style={{ background: "none", border: "none", cursor: "pointer", color: DG }}><LogOut size={14} /></button>
+          <button onClick={() => { setPassModal(true); setPassData({ current: "", newPass: "", confirm: "", err: "", success: "" }); }} title="CHANGE PASSKEY" style={{ background: "none", border: "none", cursor: "pointer", color: DG }}><Lock size={14} /></button>
+          <button onClick={logout} title="LOGOUT" style={{ background: "none", border: "none", cursor: "pointer", color: DG }}><LogOut size={14} /></button>
         </div>
       </div>
 
@@ -488,12 +546,16 @@ export default function App() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(270px,1fr))", gap: 2 }}>
             {ALL_IDS.map(id => {
               const isBlocked = blocked.includes(id);
+              const isOnline = activeUsers.includes(id);
               const revealed = revealedIds[id];
               return (
                 <div key={id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, padding: "8px 10px", borderBottom: "1px solid #001007", background: isBlocked ? "rgba(30,0,0,0.3)" : "transparent" }}>
                   <div style={{ minWidth: 0 }}>
-                    <span style={{ color: id === ADMIN_ID ? "#665000" : isBlocked ? "#330000" : MG, fontWeight: "bold" }}>{ghostTag(id)}</span>
-                    {revealed && <div style={{ color: isBlocked ? "#440000" : "#00661a", fontSize: 11, marginTop: 1 }}>{id}</div>}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {isOnline && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#00bb2d", boxShadow: "0 0 5px #00bb2d", flexShrink: 0 }} />}
+                      <span style={{ color: id === ADMIN_ID ? "#665000" : isBlocked ? "#330000" : MG, fontWeight: "bold" }}>{ghostTag(id)}</span>
+                    </div>
+                    {revealed && <div style={{ color: isBlocked ? "#440000" : "#00661a", fontSize: 11, marginTop: 1, paddingLeft: isOnline ? 12 : 0 }}>{id}</div>}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: 8 }}>
                     <button onClick={() => setRevealedIds(p => ({ ...p, [id]: !p[id] }))} style={{ background: "none", border: "none", cursor: "pointer", color: revealed ? G : DG }}>{revealed ? <EyeOff size={13} /> : <Eye size={13} />}</button>
