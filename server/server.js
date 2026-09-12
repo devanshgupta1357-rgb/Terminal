@@ -13,8 +13,16 @@ const SystemState = require('./models/SystemState');
 const Report = require('./models/Report'); 
 const Operator = require('./models/Operator');
 const bcrypt = require('bcryptjs');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
+
+// --- SECURITY: Rate Limiting ---
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, 
+  max: 10, // Max 10 attempts per IP per 15 minutes
+  message: { error: "TOO MANY LOGIN ATTEMPTS — IP BLOCKED FOR 15 MINUTES" }
+});
 
 // --- DEPLOYMENT UPDATE: Dynamic CORS ---
 // This allows your live Vercel frontend AND your local Vite server to connect securely.
@@ -69,13 +77,20 @@ const ghostTag = (id) => {
 };
 
 // --- API ROUTES ---
+const onlineSockets = new Map();
+
 app.get('/ping', (req, res) => res.status(200).send('pong'));
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', loginLimiter, async (req, res) => {
   const { id, pw } = req.body;
   const cleanId = id.toLowerCase().trim();
 
   if (!isValid(cleanId)) return res.status(400).json({ error: "ACCESS DENIED — INVALID OPERATOR ID" });
+
+  const activeIds = Array.from(new Set(onlineSockets.values()));
+  if (activeIds.includes(cleanId)) {
+    return res.status(403).json({ error: "ACCESS DENIED — OPERATOR ALREADY ACTIVE" });
+  }
 
   let valid = false;
   const sysUser = await Operator.findOne({ btId: cleanId });
@@ -107,7 +122,7 @@ app.post('/api/login', async (req, res) => {
   });
 });
 
-app.post('/api/change-password', async (req, res) => {
+app.post('/api/change-password', loginLimiter, async (req, res) => {
   try {
     const { id, currentPw, newPw } = req.body;
     const cleanId = id.toLowerCase().trim();
@@ -143,9 +158,21 @@ app.post('/api/change-password', async (req, res) => {
   }
 });
 
-const onlineSockets = new Map();
-
 // --- REAL-TIME CHAT LOGIC ---
+
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) return next(new Error("Authentication Error"));
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    socket.user = payload; 
+    socket.user.ghostName = ghostTag(payload.id);
+    next();
+  } catch (err) {
+    next(new Error("Authentication Error"));
+  }
+});
+
 io.on('connection', async (socket) => {
   const sysState = await SystemState.findOne() || await SystemState.create({});
   socket.emit('system_state', sysState);
@@ -154,11 +181,10 @@ io.on('connection', async (socket) => {
   socket.emit('load_messages', recentMessages);
 
   // --- JOIN / LEAVE LOGIC ---
-  socket.on('identify', (data) => {
-    const isObj = typeof data === 'object';
-    socket.ghostName = isObj ? data.ghost : data;
-    socket.btId = isObj ? data.btId : null;
-    if (socket.btId) onlineSockets.set(socket.id, socket.btId);
+  socket.on('identify', () => {
+    socket.ghostName = socket.user.ghostName;
+    socket.btId = socket.user.id;
+    onlineSockets.set(socket.id, socket.btId);
 
     io.emit('receive_message', { system: true, color: "#00bb2d", text: `[${socket.ghostName}] CONNECTED TO NODE` });
     io.emit('active_users', Array.from(new Set(onlineSockets.values())));
@@ -174,22 +200,29 @@ io.on('connection', async (socket) => {
 
   // --- TYPING INDICATOR ---
   socket.on('typing', (data) => {
+    data.ghost = socket.user.ghostName;
     socket.broadcast.emit('user_typing', data); 
   });
 
   // Listen for new messages
   socket.on('send_message', async (data) => {
+    // Server-side Firewall: Limit data size to prevent DoS attacks
+    if (!data.text || typeof data.text !== 'string' || data.text.length > 300) return;
+
+    const btId = socket.user.id;
+    const ghost = socket.user.ghostName;
+
     const currentState = await SystemState.findOne();
-    if (currentState?.isMuted && data.btId !== ADMIN_ID) return; 
+    if (currentState?.isMuted && !socket.user.isAdmin) return; 
 
     // Server-side firewall: Check if blocked mid-session
-    const isBlocked = await BlockedUser.findOne({ btId: data.btId });
+    const isBlocked = await BlockedUser.findOne({ btId });
     if (isBlocked) return; 
 
     const newMessage = new Message({
       text: data.text,
-      btId: data.btId,
-      ghost: data.ghost,
+      btId,
+      ghost,
       sentAt: new Date() 
     });
 
@@ -199,12 +232,14 @@ io.on('connection', async (socket) => {
 
   // --- REPORTING & ADMIN LOGIC ---
   socket.on('submit_report', async (data) => {
+    data.reporterBtId = socket.user.id;
+    data.reporterGhost = socket.user.ghostName;
     const newReport = await Report.create(data);
     io.emit('new_report', newReport); 
   });
 
-  socket.on('request_admin_data', async (adminId) => {
-    if (adminId !== ADMIN_ID) return;
+  socket.on('request_admin_data', async () => {
+    if (!socket.user.isAdmin) return;
     const reports = await Report.find().sort({ createdAt: -1 });
     const blockedUsers = await BlockedUser.find();
     socket.emit('admin_data', { 
@@ -214,7 +249,7 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('toggle_block', async (data) => {
-    if (data.adminId !== ADMIN_ID) return;
+    if (!socket.user.isAdmin) return;
     
     if (data.isBlocked) {
       const exists = await BlockedUser.findOne({ btId: data.btId });
@@ -232,7 +267,7 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('admin_command', async (cmdData) => {
-    if (cmdData.adminId !== ADMIN_ID) return; 
+    if (!socket.user.isAdmin) return;
 
     let sysState = await SystemState.findOne() || await SystemState.create({});
 

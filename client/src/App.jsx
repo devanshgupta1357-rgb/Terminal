@@ -5,7 +5,7 @@ import { io } from "socket.io-client";
 
 // --- COMM LINKS ---
 const API_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
-const socket = io(API_URL);
+const socket = io(API_URL, { autoConnect: false });
 
 // --- CONSTANTS & GENERATORS ---
 const ADMIN_ID = "bt25csd064";
@@ -172,8 +172,9 @@ export default function App() {
             if (response.data.sysState) {
               setMuted(response.data.sysState.isMuted); setLocked(response.data.sysState.isLocked);
             }
+            socket.auth = { token: response.data.token };
             socket.connect();
-            socket.emit('identify', { ghost: response.data.user.ghost, btId: response.data.user.id });
+            socket.emit('identify');
             if (response.data.user.isAdmin) {
               socket.emit('request_admin_data', response.data.user.id);
             }
@@ -500,8 +501,8 @@ export default function App() {
             <span style={{ color: "#00bb2d", fontSize: 16 }}>{">"}</span>
             {!user.isAdmin && muted
               ? <div style={{ flex: 1, fontSize: 13, color: "#ff8800", letterSpacing: "0.1em" }}>⊘ CHANNEL MUTED BY ADMIN</div>
-              : <input autoFocus style={{ flex: 1, background: "transparent", border: "none", color: G, fontSize: 14, outline: "none", fontFamily: "'Courier New',monospace" }}
-                placeholder="TRANSMIT MESSAGE..." value={inp} onChange={handleInpChange} onKeyDown={e => e.key === "Enter" && send()} />
+              : <input autoFocus maxLength={300} style={{ flex: 1, background: "transparent", border: "none", color: G, fontSize: 14, outline: "none", fontFamily: "'Courier New',monospace" }}
+                placeholder="TRANSMIT MESSAGE (MAX 300 CHARS)..." value={inp} onChange={handleInpChange} onKeyDown={e => e.key === "Enter" && send()} />
             }
             <button onClick={send} disabled={!user.isAdmin && muted} style={{ fontSize: 12, padding: "5px 14px", cursor: (!user.isAdmin && muted) ? "not-allowed" : "pointer", background: "#001a07", border: `1px solid ${DG}`, color: MG }}>TX</button>
           </div>
