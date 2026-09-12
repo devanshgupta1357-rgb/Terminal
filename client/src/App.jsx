@@ -437,8 +437,8 @@ export default function App() {
              </span>
           )}
           <span style={{ fontSize: 11, color: user.ghost === "SUDO_MASTER" ? "#ffd700" : G, fontWeight: "bold" }}>[{user.ghost}]</span>
-          <button onClick={() => { setPassModal(true); setPassData({ current: "", newPass: "", confirm: "", err: "", success: "" }); }} title="CHANGE PASSKEY" style={{ background: "none", border: "none", cursor: "pointer", color: DG }}><Lock size={14} /></button>
-          <button onClick={logout} title="LOGOUT" style={{ background: "none", border: "none", cursor: "pointer", color: DG }}><LogOut size={14} /></button>
+          <button onClick={() => { setPassModal(true); setPassData({ current: "", newPass: "", confirm: "", err: "", success: "" }); }} title="CHANGE PASSKEY" style={{ background: "none", border: "none", cursor: "pointer", color: "#00bb2d" }}><Lock size={18} /></button>
+          <button onClick={logout} title="LOGOUT" style={{ background: "none", border: "none", cursor: "pointer", color: "#00bb2d" }}><LogOut size={18} /></button>
         </div>
       </div>
 
