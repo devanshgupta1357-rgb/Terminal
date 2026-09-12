@@ -68,12 +68,17 @@ const mkPass = id => id===ADMIN_ID ? ADMIN_PASS : id+"2026!";
 
 // Server generates the Ghost Tag securely
 const ghostTag = (id) => {
-  if(id===ADMIN_ID) return "SUDO_MASTER";
+  if (id === ADMIN_ID) return "SUDO_MASTER";
   const day = Math.floor(Date.now() / 86400000);
-  const n = parseInt(id.slice(-3))-1;
-  const pi = (n + day*3) % PFX.length;
-  const si = (Math.floor(n/7) + day*2) % SFX.length;
-  return `${PFX[pi]}_${SFX[si]}_${(n+1)}`;
+  const n = parseInt(id.slice(-3)) - 1;
+  const pi = (n + day * 3) % PFX.length;
+  const si = (Math.floor(n / 7) + day * 2) % SFX.length;
+  
+  // Bijective scrambling using coprime 13 on 70 elements
+  const scrambled = ((n * 13 + day * 17) % 70) + 1;
+  const numStr = String(scrambled).padStart(2, "0");
+  
+  return `${PFX[pi]}_${SFX[si]}_${numStr}`;
 };
 
 // --- API ROUTES ---

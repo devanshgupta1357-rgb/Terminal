@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Terminal, ShieldAlert, Lock, Flag, Users, LogOut, Zap, UserX, AlertTriangle, X, Eye, EyeOff, AlertOctagon, VolumeX, Volume2, Trash2, LogIn } from "lucide-react";
 import axios from "axios";
 import { io } from "socket.io-client";
@@ -21,7 +21,9 @@ const ghostTag = (id, day = DAY_NUM) => {
   const n = parseInt(id.slice(-3)) - 1;
   const pi = (n + day * 3) % PFX.length;
   const si = (Math.floor(n / 7) + day * 2) % SFX.length;
-  return `${PFX[pi]}_${SFX[si]}_${(n + 1)}`;
+  const scrambled = ((n * 13 + day * 17) % 70) + 1;
+  const numStr = String(scrambled).padStart(2, "0");
+  return `${PFX[pi]}_${SFX[si]}_${numStr}`;
 };
 
 const SCAN = { background: "repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.13) 2px,rgba(0,0,0,0.13) 4px)", pointerEvents: "none" };
@@ -78,6 +80,9 @@ export default function App() {
   const [typing, setTyping] = useState([]);
   const typingTimeout = useRef(null);
   const [activeUsers, setActiveUsers] = useState([]);
+  const [mentionQuery, setMentionQuery] = useState(null);
+
+  const allGhosts = useMemo(() => ALL_IDS.map(id => ghostTag(id)).filter(g => g !== user?.ghost), [user]);
 
   // Admin Data States
   const [reports, setReports] = useState([]);
@@ -191,7 +196,16 @@ export default function App() {
   }
 
   function handleInpChange(e) {
-    setInp(e.target.value);
+    const val = e.target.value;
+    setInp(val);
+
+    const lastWord = val.split(" ").pop();
+    if (lastWord.startsWith("@") && lastWord.length <= 20) {
+      setMentionQuery(lastWord.slice(1).toUpperCase());
+    } else {
+      setMentionQuery(null);
+    }
+
     if (!user || (!user.isAdmin && muted)) return;
     
     socket.emit("typing", { ghost: user.ghost, isTyping: true });
@@ -474,11 +488,16 @@ export default function App() {
               const fading = secs <= 10;
               if (secs <= 0) return null;
 
+              const isTagged = m.text.includes(`@${user.ghost}`);
               return (
-                <div key={m._id || m.id || Math.random()} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "5px 0", opacity: fading ? 0.4 + 0.6 * (secs / 10) : 1, transition: "opacity 0.5s", borderBottom: "1px solid #000c04" }}>
+                <div key={m._id || m.id || Math.random()} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "5px 6px", margin: "2px 0", background: isTagged ? "rgba(0,255,65,0.08)" : "transparent", borderLeft: isTagged ? `2px solid ${G}` : "2px solid transparent", opacity: fading ? 0.4 + 0.6 * (secs / 10) : 1, transition: "opacity 0.5s", borderBottom: isTagged ? "none" : "1px solid #000c04" }}>
                   <div style={{ flex: 1, minWidth: 0, lineHeight: 1.8 }}>
                     <span style={{ fontSize: 13, fontWeight: "bold", marginRight: 8, color: m.ghost === "SUDO_MASTER" ? "#ffd700" : G }}>[{m.ghost}]</span>
-                    <span style={{ fontSize: 14, color: "#ccffdd", wordBreak: "break-word" }}>{m.text}</span>
+                    <span style={{ fontSize: 14, color: "#ccffdd", wordBreak: "break-word" }}>
+                      {m.text.split(new RegExp(`(@${user.ghost})`, 'gi')).map((part, i) => 
+                         part.toUpperCase() === `@${user.ghost}` ? <span key={i} style={{ color: "#000", background: G, padding: "0 4px", fontWeight: "bold" }}>{part}</span> : part
+                      )}
+                    </span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, paddingTop: 3 }}>
                     <span style={{ fontSize: 10, color: fading ? "#cc2200" : "#00bb2d", minWidth: 26, textAlign: "right" }}>{secs}s</span>
@@ -497,14 +516,30 @@ export default function App() {
             )}
             <div ref={endRef} />
           </div>
-          <div style={{ position: "relative", zIndex: 10, display: "flex", alignItems: "center", gap: "8px", padding: "12px 16px", flexShrink: 0, borderTop: "1px solid #001a07", background: "#000" }}>
-            <span style={{ color: "#00bb2d", fontSize: 16 }}>{">"}</span>
-            {!user.isAdmin && muted
-              ? <div style={{ flex: 1, fontSize: 13, color: "#ff8800", letterSpacing: "0.1em" }}>⊘ CHANNEL MUTED BY ADMIN</div>
-              : <input autoFocus maxLength={300} style={{ flex: 1, background: "transparent", border: "none", color: G, fontSize: 14, outline: "none", fontFamily: "'Courier New',monospace" }}
-                placeholder="TRANSMIT MESSAGE (MAX 300 CHARS)..." value={inp} onChange={handleInpChange} onKeyDown={e => e.key === "Enter" && send()} />
-            }
-            <button onClick={send} disabled={!user.isAdmin && muted} style={{ fontSize: 12, padding: "5px 14px", cursor: (!user.isAdmin && muted) ? "not-allowed" : "pointer", background: "#001a07", border: `1px solid ${DG}`, color: MG }}>TX</button>
+          <div style={{ position: "relative", zIndex: 10, display: "flex", flexDirection: "column", gap: "8px", padding: "12px 16px", flexShrink: 0, borderTop: "1px solid #001a07", background: "#000" }}>
+            {mentionQuery !== null && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {allGhosts.filter(g => g.includes(mentionQuery)).slice(0, 5).map(g => (
+                  <button key={g} onClick={() => {
+                    const words = inp.split(" ");
+                    words.pop();
+                    setInp(words.join(" ") + (words.length ? " " : "") + "@" + g + " ");
+                    setMentionQuery(null);
+                  }} style={{ background: "#001a07", border: `1px solid ${DG}`, color: G, padding: "3px 8px", fontSize: 11, cursor: "pointer", fontFamily: "'Courier New',monospace" }}>
+                    @{g}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ color: "#00bb2d", fontSize: 16 }}>{">"}</span>
+              {!user.isAdmin && muted
+                ? <div style={{ flex: 1, fontSize: 13, color: "#ff8800", letterSpacing: "0.1em" }}>⊘ CHANNEL MUTED BY ADMIN</div>
+                : <input autoFocus maxLength={300} style={{ flex: 1, background: "transparent", border: "none", color: G, fontSize: 14, outline: "none", fontFamily: "'Courier New',monospace" }}
+                  placeholder="TRANSMIT MESSAGE (MAX 300 CHARS)..." value={inp} onChange={handleInpChange} onKeyDown={e => e.key === "Enter" && send()} />
+              }
+              <button onClick={send} disabled={!user.isAdmin && muted} style={{ fontSize: 12, padding: "5px 14px", cursor: (!user.isAdmin && muted) ? "not-allowed" : "pointer", background: "#001a07", border: `1px solid ${DG}`, color: MG }}>TX</button>
+            </div>
           </div>
         </>
       )}
