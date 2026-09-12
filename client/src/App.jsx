@@ -439,7 +439,7 @@ export default function App() {
       )}
 
       {/* Header */}
-      <div style={{ position: "relative", zIndex: 10, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 16px", flexShrink: 0, borderBottom: "1px solid #001a07", background: "#000" }}>
+      <header style={{ position: "relative", zIndex: 10, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 16px", flex: "none", borderBottom: "1px solid #001a07", background: "#000" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Terminal size={15} style={{ color: "#00bb2d" }} />
           <span style={{ fontSize: 17, fontWeight: "bold", letterSpacing: "0.3em" }}>TERMINAL</span>
@@ -455,11 +455,11 @@ export default function App() {
           <button onClick={() => { setPassModal(true); setPassData({ current: "", newPass: "", confirm: "", err: "", success: "" }); }} title="CHANGE PASSKEY" style={{ background: "none", border: "none", cursor: "pointer", color: "#00bb2d" }}><Lock size={18} /></button>
           <button onClick={logout} title="LOGOUT" style={{ background: "none", border: "none", cursor: "pointer", color: "#00bb2d" }}><LogOut size={18} /></button>
         </div>
-      </div>
+      </header>
 
       {/* Admin controls & Tabs */}
       {user.isAdmin && (
-        <div style={{ position: "relative", zIndex: 10, flexShrink: 0, borderBottom: "1px solid #001a07", background: "#000" }}>
+        <div style={{ position: "relative", zIndex: 10, flex: "none", borderBottom: "1px solid #001a07", background: "#000" }}>
           <div style={{ display: "flex", alignItems: "center", borderBottom: "1px solid #001007" }}>
             {["chat", "reports", "users"].map(t => (
               <button key={t} onClick={() => setTab(t)}
@@ -480,7 +480,7 @@ export default function App() {
       {/* CHAT TAB */}
       {(tab === "chat" || !user.isAdmin) && (
         <>
-          <div style={{ position: "relative", zIndex: 10, flex: 1, overflowY: "auto", padding: "16px" }}>
+          <main style={{ position: "relative", zIndex: 10, flex: "1 1 auto", overflowY: "auto", padding: "16px" }}>
             {msgs.length === 0 && <div style={{ textAlign: "center", marginTop: 40, color: DG, fontSize: 13, letterSpacing: "0.2em" }}>◈ DS CHANNEL CLEAR ◈</div>}
             {msgs.map(m => {
               if (m.system) return <SysMsg key={m._id || Math.random()} text={m.text} color={m.color} />;
@@ -515,8 +515,8 @@ export default function App() {
               </div>
             )}
             <div ref={endRef} />
-          </div>
-          <div style={{ position: "relative", zIndex: 10, display: "flex", flexDirection: "column", gap: "8px", padding: "12px 16px", flexShrink: 0, borderTop: "1px solid #001a07", background: "#000" }}>
+          </main>
+          <footer style={{ position: "relative", zIndex: 10, display: "flex", flexDirection: "column", gap: "8px", padding: "12px 16px", flex: "none", borderTop: "1px solid #001a07", background: "#000" }}>
             {mentionQuery !== null && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {allGhosts.filter(g => g.includes(mentionQuery)).slice(0, 5).map(g => (
@@ -540,13 +540,13 @@ export default function App() {
               }
               <button onClick={send} disabled={!user.isAdmin && muted} style={{ fontSize: 12, padding: "5px 14px", cursor: (!user.isAdmin && muted) ? "not-allowed" : "pointer", background: "#001a07", border: `1px solid ${DG}`, color: MG }}>TX</button>
             </div>
-          </div>
+          </footer>
         </>
       )}
 
       {/* REPORTS TAB */}
       {user.isAdmin && tab === "reports" && (
-        <div style={{ position: "relative", zIndex: 10, flex: 1, overflowY: "auto", padding: "16px" }}>
+        <main style={{ position: "relative", zIndex: 10, flex: "1 1 auto", overflowY: "auto", padding: "16px" }}>
           <div style={{ fontSize: 13, color: "#cc2200", marginBottom: 16, display: "flex", alignItems: "center", gap: 6, letterSpacing: "0.12em" }}><ShieldAlert size={14} />INCIDENT REPORT LOG</div>
           {reports.length === 0 ? <div style={{ textAlign: "center", marginTop: 60, color: DG, fontSize: 13 }}>NO REPORTS ON RECORD</div> : reports.map((r, i) => (
             <div key={i} style={{ border: "1px solid #330000", padding: 16, marginBottom: 12, background: "rgba(30,0,0,0.2)" }}>
@@ -572,13 +572,13 @@ export default function App() {
               }
             </div>
           ))}
-        </div>
+        </main>
       )}
 
       {/* USERS TAB */}
       {user.isAdmin && tab === "users" && (
-        <div style={{ position: "relative", zIndex: 10, flex: 1, overflowY: "auto", padding: "16px" }}>
-          <div style={{ fontSize: 13, color: MG, marginBottom: 16, display: "flex", alignItems: "center", gap: 6, letterSpacing: "0.12em" }}><Users size={14} />DS OPERATOR REGISTRY</div>
+        <main style={{ position: "relative", zIndex: 10, flex: "1 1 auto", overflowY: "auto", padding: "16px" }}>
+          <div style={{ fontSize: 13, color: "#00bb2d", marginBottom: 16, display: "flex", alignItems: "center", gap: 6, letterSpacing: "0.12em" }}><Users size={14} />SYSTEM REGISTRY</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(270px,1fr))", gap: 2 }}>
             {ALL_IDS.map(id => {
               const isBlocked = blocked.includes(id);
@@ -604,7 +604,7 @@ export default function App() {
               );
             })}
           </div>
-        </div>
+        </main>
       )}
     </div>
   );
