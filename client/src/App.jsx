@@ -109,7 +109,18 @@ export default function App() {
     });
 
     socket.on("load_messages", (pastMessages) => setMsgs(pastMessages));
-    socket.on("receive_message", (m) => setMsgs((p) => [...p, m]));
+    socket.on("receive_message", (m) => setMsgs((prev) => {
+      if (m.clientMsgId) {
+        const idx = prev.findIndex(msg => msg._id === m.clientMsgId);
+        if (idx !== -1) {
+          const next = [...prev];
+          next[idx] = m;
+          return next;
+        }
+      }
+      if (prev.some(msg => msg._id === m._id)) return prev;
+      return [...prev, m].slice(-50);
+    }));
     socket.on("clear_all_messages", () => setMsgs([]));
 
     socket.on("user_typing", (data) => {
@@ -217,8 +228,15 @@ export default function App() {
 
   function send() {
     if (!inp.trim() || !user || (!user.isAdmin && muted)) return;
-    socket.emit("send_message", { text: inp.trim(), btId: user.id, ghost: user.ghost });
+    const txt = inp.trim();
     setInp("");
+    
+    const tempId = "temp_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+    const optMsg = { _id: tempId, text: txt, btId: user.id, ghost: user.ghost, sentAt: new Date().toISOString(), pending: true };
+    setMsgs(prev => [...prev, optMsg]);
+    setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), 10);
+
+    socket.emit("send_message", { text: txt, clientMsgId: tempId });
     socket.emit("typing", { ghost: user.ghost, isTyping: false });
     clearTimeout(typingTimeout.current);
   }
@@ -298,7 +316,7 @@ export default function App() {
               style={{ width: 16, height: 16, border: `1px solid ${agreed ? G : DG}`, background: agreed ? "#001a07" : "#000", flexShrink: 0, marginTop: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {agreed && <span style={{ color: G, fontSize: 13, lineHeight: 1 }}>✓</span>}
             </div>
-            <span style={{ fontSize: 13, color: agreed ? G : "#00661a", lineHeight: 1.5 }}>I agree to conduct myself responsibly within the DS terminal.</span>
+            <span style={{ fontSize: 13, color: G, lineHeight: 1.5 }}>I agree to conduct myself responsibly within the DS terminal.</span>
           </label>
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={() => { if (agreed) setShowDisclaimer(false); }}
@@ -490,17 +508,19 @@ export default function App() {
 
               const isTagged = m.text.includes(`@${user.ghost}`);
               return (
-                <div key={m._id || m.id || Math.random()} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "5px 6px", margin: "2px 0", background: isTagged ? "rgba(0,255,65,0.08)" : "transparent", borderLeft: isTagged ? `2px solid ${G}` : "2px solid transparent", opacity: fading ? 0.4 + 0.6 * (secs / 10) : 1, transition: "opacity 0.5s", borderBottom: isTagged ? "none" : "1px solid #000c04" }}>
+                <div key={m._id || m.id || Math.random()} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "5px 6px", margin: "2px 0", background: isTagged ? "rgba(0,255,65,0.08)" : "transparent", borderLeft: isTagged ? `2px solid ${G}` : "2px solid transparent", opacity: m.pending ? 0.6 : (fading ? 0.4 + 0.6 * (secs / 10) : 1), transition: "opacity 0.5s", borderBottom: isTagged ? "none" : "1px solid #000c04" }}>
                   <div style={{ flex: 1, minWidth: 0, lineHeight: 1.8 }}>
-                    <span style={{ fontSize: 13, fontWeight: "bold", marginRight: 8, color: m.ghost === "SUDO_MASTER" ? "#ffd700" : G }}>[{m.ghost}]</span>
-                    <span style={{ fontSize: 14, color: "#ccffdd", wordBreak: "break-word" }}>
+                    <span style={{ fontSize: 13, fontWeight: "bold", marginRight: 8, color: m.ghost === "SUDO_MASTER" ? "#ffd700" : (m.pending ? "#00661a" : G) }}>[{m.ghost}]</span>
+                    <span style={{ fontSize: 14, color: m.pending ? "#00661a" : "#ccffdd", wordBreak: "break-word" }}>
                       {m.text.split(new RegExp(`(@${user.ghost})`, 'gi')).map((part, i) => 
-                         part.toUpperCase() === `@${user.ghost}` ? <span key={i} style={{ color: "#000", background: G, padding: "0 4px", fontWeight: "bold" }}>{part}</span> : part
+                         part.toUpperCase() === `@${user.ghost}` ? <span key={i} style={{ color: "#000", background: m.pending ? "#00661a" : G, padding: "0 4px", fontWeight: "bold" }}>{part}</span> : part
                       )}
                     </span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, paddingTop: 3 }}>
-                    <span style={{ fontSize: 10, color: fading ? "#cc2200" : "#00bb2d", minWidth: 26, textAlign: "right" }}>{secs}s</span>
+                    <span style={{ fontSize: 10, color: fading && !m.pending ? "#cc2200" : "#00bb2d", minWidth: 26, textAlign: "right", letterSpacing: m.pending ? "0.2em" : "normal" }}>
+                      {m.pending ? "..." : `${secs}s`}
+                    </span>
                     <div style={{ display: "flex", gap: 4 }}>
                       {m.btId !== user.id && <button onClick={() => setReportModal({ msg: m })} style={{ background: "none", border: "none", cursor: "pointer", color: DG, padding: 0 }}><Flag size={13} /></button>}
                       {user.isAdmin && m.btId !== ADMIN_ID && <button onClick={() => toggleBlockUser(m.btId, true)} style={{ background: "none", border: "none", cursor: "pointer", color: DG, padding: 0 }}><UserX size={13} /></button>}

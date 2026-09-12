@@ -232,7 +232,9 @@ io.on('connection', async (socket) => {
     });
 
     await newMessage.save();
-    io.emit('receive_message', newMessage); 
+    const payload = newMessage.toObject();
+    if (data.clientMsgId) payload.clientMsgId = data.clientMsgId;
+    io.emit('receive_message', payload); 
   });
 
   // --- REPORTING & ADMIN LOGIC ---
