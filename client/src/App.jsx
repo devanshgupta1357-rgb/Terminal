@@ -388,7 +388,7 @@ export default function App() {
 
   /* ─── MAIN TERMINAL ─── */
   if (scr === "chat" && user) return (
-    <div style={{ position: "relative", display: "flex", flexDirection: "column", backgroundColor: "#000", overflow: "hidden", height: "100dvh", fontFamily: "'Courier New',monospace", color: G }}>
+    <div style={{ position: "relative", display: "flex", flexDirection: "column", backgroundColor: "#000", overflow: "hidden", height: "100dvh", paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)", fontFamily: "'Courier New',monospace", color: G }}>
       <div style={{ ...SCAN, position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 40 }} />
 
       {/* Report Modal */}
