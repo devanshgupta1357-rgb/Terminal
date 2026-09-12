@@ -439,13 +439,13 @@ export default function App() {
       )}
 
       {/* Header */}
-      <div style={{ position: "relative", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px", flexShrink: 0, borderBottom: "1px solid #001a07", background: "#000" }}>
+      <div style={{ position: "relative", zIndex: 10, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 16px", flexShrink: 0, borderBottom: "1px solid #001a07", background: "#000" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Terminal size={15} style={{ color: "#00bb2d" }} />
           <span style={{ fontSize: 17, fontWeight: "bold", letterSpacing: "0.3em" }}>TERMINAL</span>
           {locked && <span style={{ fontSize: 10, color: "#ff4444", border: "1px solid #550000", padding: "1px 6px" }}>LOCKED</span>}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
           {user.isAdmin && (
              <span style={{ fontSize: 11, color: "#00bb2d", display: "flex", alignItems: "center", gap: 4 }}>
                <Zap size={12} /> {activeUsers.length} ONLINE
