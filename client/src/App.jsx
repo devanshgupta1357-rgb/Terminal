@@ -106,6 +106,7 @@ export default function App() {
   const [typing, setTyping] = useState([]);
   const typingTimeout = useRef(null);
   const [activeUsers, setActiveUsers] = useState([]);
+  const [channelUserCount, setChannelUserCount] = useState(0);
   const [mentionQuery, setMentionQuery] = useState(null);
 
   const allGhosts = useMemo(() => ALL_IDS.map(id => ghostTag(id)).filter(g => g !== user?.ghost), [user]);
@@ -158,6 +159,7 @@ export default function App() {
     });
 
     socket.on("active_users", (users) => setActiveUsers(users));
+    socket.on("channel_users", (count) => setChannelUserCount(count));
 
     socket.on("admin_data", (data) => {
       setReports(data.reports);
@@ -507,9 +509,13 @@ export default function App() {
           {locked && <span style={{ fontSize: 10, color: "#ff4444", border: "1px solid #550000", padding: "1px 6px" }}>LOCKED</span>}
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-          {user.isAdmin && (
-             <span style={{ fontSize: 11, color: "#00bb2d", display: "flex", alignItems: "center", gap: 4 }}>
-               <Zap size={12} /> {activeUsers.length} ONLINE
+          {user.isAdmin ? (
+             <span style={{ fontSize: 11, color: "#00bb2d", display: "flex", alignItems: "center", gap: 4 }} title="GLOBAL ONLINE COUNT">
+               <Users size={12} /> {activeUsers.length} ONLINE
+             </span>
+          ) : (
+             <span style={{ fontSize: 11, color: "#00bb2d", display: "flex", alignItems: "center", gap: 4 }} title={`USERS IN ${activeChannel.toUpperCase()}`}>
+               <Zap size={12} /> {channelUserCount} ONLINE
              </span>
           )}
           <span style={{ fontSize: 11, color: user.ghost === "SUDO_MASTER" ? "#ffd700" : G, fontWeight: "bold" }}>[{user.ghost}]</span>

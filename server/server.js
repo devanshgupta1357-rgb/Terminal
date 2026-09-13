@@ -227,19 +227,36 @@ io.on('connection', async (socket) => {
   socket.on('identify', () => {
     socket.ghostName = socket.user.ghostName;
     socket.btId = socket.user.id;
-    onlineSockets.set(socket.id, socket.btId);
-
     const channel = socket.user.channel || 'general';
+    onlineSockets.set(socket.id, { btId: socket.btId, channel });
+
     io.to(channel).emit('receive_message', { system: true, channel, color: "#00bb2d", text: `[${socket.ghostName}] CONNECTED TO NODE` });
-    io.emit('active_users', Array.from(new Set(onlineSockets.values())));
+    
+    // Broadcast stats
+    const usersInChannel = new Set();
+    const allUsers = new Set();
+    for (const [sId, d] of onlineSockets.entries()) {
+      allUsers.add(d.btId);
+      if (d.channel === channel) usersInChannel.add(d.btId);
+    }
+    io.emit('active_users', Array.from(allUsers));
+    io.to(channel).emit('channel_users', usersInChannel.size);
   });
 
   socket.on('disconnect', () => {
     if (socket.ghostName) {
-      onlineSockets.delete(socket.id);
       const channel = socket.user.channel || 'general';
+      onlineSockets.delete(socket.id);
       io.to(channel).emit('receive_message', { system: true, channel, color: "#993300", text: `[${socket.ghostName}] NODE DISCONNECTED` });
-      io.emit('active_users', Array.from(new Set(onlineSockets.values())));
+      
+      const usersInChannel = new Set();
+      const allUsers = new Set();
+      for (const [sId, d] of onlineSockets.entries()) {
+        allUsers.add(d.btId);
+        if (d.channel === channel) usersInChannel.add(d.btId);
+      }
+      io.emit('active_users', Array.from(allUsers));
+      io.to(channel).emit('channel_users', usersInChannel.size);
     }
   });
 
