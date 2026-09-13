@@ -24,6 +24,11 @@ const messageSchema = new mongoose.Schema({
     type: Date, 
     default: Date.now,
     expires: 60 // ⚠️ THIS IS THE MAGIC! MongoDB will auto-delete this document 60 seconds after it is created.
+  },
+  channel: {
+    type: String,
+    enum: ['general', 'ds'],
+    default: 'general'
   }
 });
 

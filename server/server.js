@@ -63,21 +63,49 @@ const ADMIN_PASS = "bt25csd0641357!";
 const PFX = ["OPERATOR","GHOST","CIPHER","PHANTOM","SHADOW","VECTOR","NEXUS","PROXY","DAEMON","SPECTER"];
 const SFX = ["ALPHA","BETA","GAMMA","DELTA","SIGMA","OMEGA","ZETA","THETA","KAPPA","LAMBDA"];
 
-const isValid = id => /^bt25csd(0[0-6]\d|070)$/.test(id) && parseInt(id.slice(-3))>=1;
+const VALID_BATCHES = {
+  bt24cse: 223, bt24csa: 67, bt24csd: 66, bt24csh: 66, bt24ece: 132, bt24eci: 49,
+  bt25cse: 220, bt25csd: 70, bt25csa: 68, bt25csh: 74, bt25ece: 132, bt25eci: 69
+};
+
+let TOTAL_USERS = 0;
+const BATCH_OFFSETS = {};
+Object.entries(VALID_BATCHES).forEach(([prefix, max]) => {
+  BATCH_OFFSETS[prefix] = TOTAL_USERS;
+  TOTAL_USERS += max; // Sum is exactly 1236
+});
+
+function getUserIndex(id) {
+  const m = id.match(/^(bt2[45][a-z]{3})(\d{3})$/);
+  if (!m) return -1;
+  return BATCH_OFFSETS[m[1]] + (parseInt(m[2], 10) - 1);
+}
+
+const isValid = id => {
+  if (id === ADMIN_ID) return true;
+  const m = id.match(/^(bt2[45][a-z]{3})(\d{3})$/);
+  if (!m) return false;
+  const prefix = m[1], num = parseInt(m[2], 10);
+  return VALID_BATCHES[prefix] && num >= 1 && num <= VALID_BATCHES[prefix];
+};
+
 const mkPass = id => id===ADMIN_ID ? ADMIN_PASS : id+"2026!";
 
-// Server generates the Ghost Tag securely
+// Server generates the Ghost Tag securely for 1,236 users natively
 const ghostTag = (id) => {
   if (id === ADMIN_ID) return "SUDO_MASTER";
   const day = Math.floor(Date.now() / 86400000);
-  const n = parseInt(id.slice(-3)) - 1;
-  const pi = (n + day * 3) % PFX.length;
-  const si = (Math.floor(n / 7) + day * 2) % SFX.length;
+  const idx = getUserIndex(id);
+  if (idx === -1) return "UNKNOWN_ENTIY_00";
   
-  // Bijective scrambling using coprime 13 on 70 elements
-  const scrambled = ((n * 13 + day * 17) % 70) + 1;
-  const numStr = String(scrambled).padStart(2, "0");
+  // 17 is coprime to 1236, creates a perfect collision-free daily bijection field
+  const scrambled = (idx * 17 + day * 31) % TOTAL_USERS;
   
+  const pi = scrambled % 10;
+  const si = Math.floor(scrambled / 10) % 10;
+  const subNum = Math.floor(scrambled / 100) + 1; // Maps 1 to 13
+  
+  const numStr = String(subNum).padStart(2, "0");
   return `${PFX[pi]}_${SFX[si]}_${numStr}`;
 };
 
@@ -87,10 +115,14 @@ const onlineSockets = new Map();
 app.get('/ping', (req, res) => res.status(200).send('pong'));
 
 app.post('/api/login', loginLimiter, async (req, res) => {
-  const { id, pw } = req.body;
+  const { id, pw, channel = 'general' } = req.body;
   const cleanId = id.toLowerCase().trim();
 
   if (!isValid(cleanId)) return res.status(400).json({ error: "ACCESS DENIED — INVALID OPERATOR ID" });
+
+  if (channel === 'ds' && !cleanId.startsWith('bt25csd') && cleanId !== ADMIN_ID) {
+    return res.status(403).json({ error: "ACCESS DENIED — INSUFFICIENT SUB-NODE CLEARANCE" });
+  }
 
   const activeIds = Array.from(new Set(onlineSockets.values()));
   if (activeIds.includes(cleanId)) {
@@ -118,7 +150,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     return res.status(403).json({ error: "ACCESS DENIED — CHANNEL IS LOCKED BY ADMIN" });
   }
 
-  const token = jwt.sign({ id: cleanId, isAdmin: cleanId === ADMIN_ID }, process.env.JWT_SECRET, { expiresIn: '12h' });
+  const token = jwt.sign({ id: cleanId, isAdmin: cleanId === ADMIN_ID, channel }, process.env.JWT_SECRET, { expiresIn: '12h' });
   
   res.json({ 
     token, 
@@ -182,7 +214,10 @@ io.on('connection', async (socket) => {
   const sysState = await SystemState.findOne() || await SystemState.create({});
   socket.emit('system_state', sysState);
 
-  const recentMessages = await Message.find().sort({ sentAt: 1 }).limit(50);
+  const channel = socket.user.channel || 'general';
+  socket.join(channel);
+
+  const recentMessages = await Message.find({ channel }).sort({ sentAt: 1 }).limit(150);
   socket.emit('load_messages', recentMessages);
 
   // --- JOIN / LEAVE LOGIC ---
@@ -191,14 +226,16 @@ io.on('connection', async (socket) => {
     socket.btId = socket.user.id;
     onlineSockets.set(socket.id, socket.btId);
 
-    io.emit('receive_message', { system: true, color: "#00bb2d", text: `[${socket.ghostName}] CONNECTED TO NODE` });
+    const channel = socket.user.channel || 'general';
+    io.to(channel).emit('receive_message', { system: true, channel, color: "#00bb2d", text: `[${socket.ghostName}] CONNECTED TO NODE` });
     io.emit('active_users', Array.from(new Set(onlineSockets.values())));
   });
 
   socket.on('disconnect', () => {
     if (socket.ghostName) {
       onlineSockets.delete(socket.id);
-      io.emit('receive_message', { system: true, color: "#993300", text: `[${socket.ghostName}] NODE DISCONNECTED` });
+      const channel = socket.user.channel || 'general';
+      io.to(channel).emit('receive_message', { system: true, channel, color: "#993300", text: `[${socket.ghostName}] NODE DISCONNECTED` });
       io.emit('active_users', Array.from(new Set(onlineSockets.values())));
     }
   });
@@ -206,7 +243,8 @@ io.on('connection', async (socket) => {
   // --- TYPING INDICATOR ---
   socket.on('typing', (data) => {
     data.ghost = socket.user.ghostName;
-    socket.broadcast.emit('user_typing', data); 
+    const ch = data.channel === 'ds' ? 'ds' : 'general';
+    socket.broadcast.to(ch).emit('user_typing', data); 
   });
 
   // Listen for new messages
@@ -216,6 +254,10 @@ io.on('connection', async (socket) => {
 
     const btId = socket.user.id;
     const ghost = socket.user.ghostName;
+    const targetChannel = data.channel === 'ds' ? 'ds' : 'general';
+
+    // Channel Security Lockdown
+    if (targetChannel === 'ds' && !btId.startsWith('bt25csd') && !socket.user.isAdmin) return;
 
     const currentState = await SystemState.findOne();
     if (currentState?.isMuted && !socket.user.isAdmin) return; 
@@ -228,13 +270,14 @@ io.on('connection', async (socket) => {
       text: data.text,
       btId,
       ghost,
+      channel: targetChannel,
       sentAt: new Date() 
     });
 
     await newMessage.save();
     const payload = newMessage.toObject();
     if (data.clientMsgId) payload.clientMsgId = data.clientMsgId;
-    io.emit('receive_message', payload); 
+    io.to(targetChannel).emit('receive_message', payload); 
   });
 
   // --- REPORTING & ADMIN LOGIC ---
@@ -299,6 +342,13 @@ io.on('connection', async (socket) => {
 
     if (cmdData.action === 'force_logout') {
       io.emit('force_logout_all');
+    }
+
+    if (cmdData.action === 'delete_report' && cmdData.reportId) {
+      await Report.findByIdAndDelete(cmdData.reportId);
+      const reports = await Report.find().sort({ createdAt: -1 });
+      const blockedUsers = await BlockedUser.find();
+      io.emit('admin_data', { reports, blockedIds: blockedUsers.map(b => b.btId) });
     }
   });
 });

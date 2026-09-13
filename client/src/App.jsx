@@ -9,7 +9,29 @@ const socket = io(API_URL, { autoConnect: false });
 
 // --- CONSTANTS & GENERATORS ---
 const ADMIN_ID = "bt25csd064";
-const ALL_IDS = Array.from({ length: 70 }, (_, i) => `bt25csd${String(i + 1).padStart(3, "0")}`);
+
+const VALID_BATCHES = {
+  bt24cse: 223, bt24csa: 67, bt24csd: 66, bt24csh: 66, bt24ece: 132, bt24eci: 49,
+  bt25cse: 220, bt25csd: 70, bt25csa: 68, bt25csh: 74, bt25ece: 132, bt25eci: 69
+};
+
+let TOTAL_USERS = 0;
+const BATCH_OFFSETS = {};
+const ALL_IDS = [];
+Object.entries(VALID_BATCHES).forEach(([prefix, max]) => {
+  BATCH_OFFSETS[prefix] = TOTAL_USERS;
+  TOTAL_USERS += max;
+  for (let i = 1; i <= max; i++) {
+    ALL_IDS.push(`${prefix}${String(i).padStart(3, "0")}`);
+  }
+});
+
+function getUserIndex(id) {
+  const m = id.match(/^(bt2[45][a-z]{3})(\d{3})$/);
+  if (!m) return -1;
+  return BATCH_OFFSETS[m[1]] + (parseInt(m[2], 10) - 1);
+}
+
 const MSG_TTL = 60000;
 const DAY_NUM = Math.floor(Date.now() / 86400000);
 
@@ -18,11 +40,13 @@ const SFX = ["ALPHA", "BETA", "GAMMA", "DELTA", "SIGMA", "OMEGA", "ZETA", "THETA
 
 const ghostTag = (id, day = DAY_NUM) => {
   if (id === ADMIN_ID) return "SUDO_MASTER";
-  const n = parseInt(id.slice(-3)) - 1;
-  const pi = (n + day * 3) % PFX.length;
-  const si = (Math.floor(n / 7) + day * 2) % SFX.length;
-  const scrambled = ((n * 13 + day * 17) % 70) + 1;
-  const numStr = String(scrambled).padStart(2, "0");
+  const idx = getUserIndex(id);
+  if (idx === -1) return "UNKNOWN_ENTIY_00";
+  const scrambled = (idx * 17 + day * 31) % TOTAL_USERS;
+  const pi = scrambled % 10;
+  const si = Math.floor(scrambled / 10) % 10;
+  const subNum = Math.floor(scrambled / 100) + 1;
+  const numStr = String(subNum).padStart(2, "0");
   return `${PFX[pi]}_${SFX[si]}_${numStr}`;
 };
 
@@ -76,6 +100,7 @@ export default function App() {
   const [msgs, setMsgs] = useState([]);
   const [inp, setInp] = useState("");
   const [tab, setTab] = useState("chat");
+  const [activeChannel, setActiveChannel] = useState("general");
   const [now, setNow] = useState(Date.now());
   const [typing, setTyping] = useState([]);
   const typingTimeout = useRef(null);
@@ -175,7 +200,7 @@ export default function App() {
     setErr(""); setLoad(true); setProg(0); setBoot([]);
 
     try {
-      const response = await axios.post(`${API_URL}/api/login`, { id, pw });
+      const response = await axios.post(`${API_URL}/api/login`, { id, pw, channel: activeChannel });
 
       let p = 0, bi = 0;
       const iv = setInterval(() => {
@@ -219,25 +244,27 @@ export default function App() {
 
     if (!user || (!user.isAdmin && muted)) return;
     
-    socket.emit("typing", { ghost: user.ghost, isTyping: true });
+    socket.emit("typing", { ghost: user.ghost, channel: activeChannel, isTyping: true });
     clearTimeout(typingTimeout.current);
     typingTimeout.current = setTimeout(() => {
-      socket.emit("typing", { ghost: user.ghost, isTyping: false });
+      socket.emit("typing", { ghost: user.ghost, channel: activeChannel, isTyping: false });
     }, 2500);
   }
 
+  const canSend = activeChannel === 'general' || user?.id.startsWith('bt25csd') || user?.isAdmin;
+
   function send() {
-    if (!inp.trim() || !user || (!user.isAdmin && muted)) return;
+    if (!inp.trim() || !user || (!user.isAdmin && muted) || !canSend) return;
     const txt = inp.trim();
     setInp("");
     
     const tempId = "temp_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
-    const optMsg = { _id: tempId, text: txt, btId: user.id, ghost: user.ghost, sentAt: new Date().toISOString(), pending: true };
+    const optMsg = { _id: tempId, text: txt, btId: user.id, ghost: user.ghost, channel: activeChannel, sentAt: new Date().toISOString(), pending: true };
     setMsgs(prev => [...prev, optMsg]);
     setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), 10);
 
-    socket.emit("send_message", { text: txt, clientMsgId: tempId });
-    socket.emit("typing", { ghost: user.ghost, isTyping: false });
+    socket.emit("send_message", { text: txt, channel: activeChannel, clientMsgId: tempId });
+    socket.emit("typing", { ghost: user.ghost, channel: activeChannel, isTyping: false });
     clearTimeout(typingTimeout.current);
   }
 
@@ -282,7 +309,7 @@ export default function App() {
     }
   }
 
-  const sendAdminCmd = (action) => socket.emit('admin_command', { adminId: user.id, action });
+  const sendAdminCmd = (action, payload = {}) => socket.emit('admin_command', { adminId: user.id, action, ...payload });
   const secondsLeft = m => Math.max(0, Math.ceil((MSG_TTL - (now - new Date(m.sentAt).getTime())) / 1000));
 
   /* ─── MODALS ─── */
@@ -333,36 +360,51 @@ export default function App() {
     </div>
   );
 
-  /* ─── MAP SCREEN ─── */
+  /* ─── MAP SCREEN (NODE SELECTOR) ─── */
   if (scr === "map") return (
     <div style={{ position: "relative", minHeight: "100dvh", backgroundColor: "#000", overflow: "hidden", fontFamily: "'Courier New',monospace", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px" }}>
       <div style={{ ...SCAN, position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 40 }} />
       {showDisclaimer && <DisclaimerModal />}
       {err && <div style={{ position: "absolute", top: "16px", width: "100%", textAlign: "center", color: "#ff4444", fontWeight: "bold", zIndex: 50 }}>⚠ {err}</div>}
 
-      <div style={{ position: "relative", zIndex: 10, display: "flex", flexDirection: "column", alignItems: "center", color: G }}>
-        <div style={{ textAlign: "center", marginBottom: "40px" }}>
+      <div style={{ position: "relative", zIndex: 10, display: "flex", flexDirection: "column", alignItems: "center", color: G, width: "100%", maxWidth: 600 }}>
+        <div style={{ textAlign: "center", marginBottom: "30px" }}>
           <div style={{ fontSize: 12, color: DG, letterSpacing: "0.3em", marginBottom: 8 }}>◈ NEXUS_OS v1.0 ◈</div>
           <div style={{ fontSize: 30, fontWeight: "bold", letterSpacing: "0.35em", textShadow: GLOW }}>TERMINAL</div>
-          <div style={{ fontSize: 11, color: "#00661a", letterSpacing: "0.2em", marginTop: 4 }}>CLASSIFIED // AUTHORIZED OPERATORS ONLY</div>
+          <div style={{ fontSize: 11, color: "#00bb2d", letterSpacing: "0.2em", marginTop: 4 }}>SELECT TARGET ENDPOINT</div>
         </div>
 
-        <button onClick={() => { setCreds({ id: "", pw: "" }); setErr(""); setScr("login"); }}
-          style={{ width: 340, textAlign: "left", padding: 28, cursor: "pointer", background: "#000", border: `1px solid ${DG}`, color: G, transition: "all 0.2s" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <Terminal size={22} style={{ color: "#00bb2d" }} />
-            <span style={{ fontSize: 22, fontWeight: "bold", letterSpacing: "0.35em" }}>DS</span>
-          </div>
-          <div style={{ fontSize: 13, color: "#00661a", marginBottom: 16, lineHeight: 1.7 }}>Data Science Division — All Operators Authorized</div>
-          <div style={{ height: 1, background: "#001a07", marginBottom: 16 }} />
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: DG }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Users size={11} />70 OPERATORS ENROLLED</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Lock size={11} />SECURED</span>
-          </div>
-          <div style={{ marginTop: 16, fontSize: 11, color: "#00330d", letterSpacing: "0.15em", textAlign: "center" }}>[ CLICK TO AUTHENTICATE ]</div>
-        </button>
+        <div style={{ display: "flex", gap: "16px", width: "100%" }}>
+          <button onClick={() => { setActiveChannel("general"); setCreds({ id: "", pw: "" }); setErr(""); setScr("login"); }}
+            style={{ flex: 1, textAlign: "left", padding: 24, cursor: "pointer", background: "#001a07", border: `1px solid ${DG}`, color: G, transition: "all 0.2s", boxShadow: "0 4px 15px rgba(0,0,0,0.5)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <Terminal size={20} style={{ color: "#00bb2d" }} />
+              <span style={{ fontSize: 19, fontWeight: "bold", letterSpacing: "0.3em" }}>#GENERAL</span>
+            </div>
+            <div style={{ fontSize: 12, color: "#00bb2d", marginBottom: 12, lineHeight: 1.5 }}>Public Subnet</div>
+            <div style={{ height: 1, background: "#00330d", marginBottom: 12 }} />
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: DG }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Users size={11} />1200+ OP(S)</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Lock size={11} />ENCRYPTED</span>
+            </div>
+          </button>
 
-        <div style={{ marginTop: 24, fontSize: 11, color: "#003d0f", letterSpacing: "0.15em" }}>GHOST TAGS ROTATE EVERY 24 HOURS</div>
+          <button onClick={() => { setActiveChannel("ds"); setCreds({ id: "", pw: "" }); setErr(""); setScr("login"); }}
+            style={{ flex: 1, textAlign: "left", padding: 24, cursor: "pointer", background: "#001a07", border: `1px solid ${DG}`, color: G, transition: "all 0.2s", boxShadow: "0 4px 15px rgba(0,0,0,0.5)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <Terminal size={20} style={{ color: "#00bb2d" }} />
+              <span style={{ fontSize: 19, fontWeight: "bold", letterSpacing: "0.3em" }}>#DS_EXCLUSIVE</span>
+            </div>
+            <div style={{ fontSize: 12, color: "#00bb2d", marginBottom: 12, lineHeight: 1.5 }}>Data Science Node</div>
+            <div style={{ height: 1, background: "#00330d", marginBottom: 12 }} />
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: DG }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Users size={11} />70 OP(S)</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Lock size={11} />ENCRYPTED</span>
+            </div>
+          </button>
+        </div>
+
+        <div style={{ marginTop: 24, fontSize: 11, color: "#003d0f", letterSpacing: "0.15em" }}>OPERATOR CREDENTIALS REQUIRED FOR ENTRY</div>
       </div>
     </div>
   );
@@ -378,7 +420,7 @@ export default function App() {
         </div>
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 11, color: MG, marginBottom: 4 }}>OPERATOR_ID</div>
-          <input style={inp_s} placeholder="bt25csd###" value={creds.id}
+          <input style={inp_s} placeholder={activeChannel === "general" ? "bt id" : "bt25csd###"} value={creds.id}
             onChange={e => setCreds(p => ({ ...p, id: e.target.value }))} onKeyDown={e => e.key === "Enter" && doLogin()} />
         </div>
         <div style={{ marginBottom: 20 }}>
@@ -499,8 +541,8 @@ export default function App() {
       {(tab === "chat" || !user.isAdmin) && (
         <>
           <main style={{ position: "relative", zIndex: 10, flex: "1 1 auto", overflowY: "auto", padding: "16px" }}>
-            {msgs.length === 0 && <div style={{ textAlign: "center", marginTop: 40, color: DG, fontSize: 13, letterSpacing: "0.2em" }}>◈ DS CHANNEL CLEAR ◈</div>}
-            {msgs.map(m => {
+            {msgs.filter(m => m.channel === activeChannel).length === 0 && <div style={{ textAlign: "center", marginTop: 40, color: DG, fontSize: 13, letterSpacing: "0.2em" }}>◈ CHANNEL CLEAR ◈</div>}
+            {msgs.filter(m => m.channel === activeChannel).map(m => {
               if (m.system) return <SysMsg key={m._id || Math.random()} text={m.text} color={m.color} />;
               const secs = secondsLeft(m);
               const fading = secs <= 10;
@@ -555,10 +597,12 @@ export default function App() {
               <span style={{ color: "#00bb2d", fontSize: 16 }}>{">"}</span>
               {!user.isAdmin && muted
                 ? <div style={{ flex: 1, fontSize: 13, color: "#ff8800", letterSpacing: "0.1em" }}>⊘ CHANNEL MUTED BY ADMIN</div>
+                : !canSend
+                ? <div style={{ flex: 1, fontSize: 13, color: "#cc2200", letterSpacing: "0.1em" }}>⊘ INSUFFICIENT CLEARANCE</div>
                 : <input autoFocus maxLength={300} style={{ flex: 1, background: "transparent", border: "none", color: G, fontSize: 14, outline: "none", fontFamily: "'Courier New',monospace" }}
                   placeholder="TRANSMIT MESSAGE (MAX 300 CHARS)..." value={inp} onChange={handleInpChange} onKeyDown={e => e.key === "Enter" && send()} />
               }
-              <button onClick={send} disabled={!user.isAdmin && muted} style={{ fontSize: 12, padding: "5px 14px", cursor: (!user.isAdmin && muted) ? "not-allowed" : "pointer", background: "#001a07", border: `1px solid ${DG}`, color: MG }}>TX</button>
+              <button onClick={send} disabled={(!user.isAdmin && muted) || !canSend} style={{ fontSize: 12, padding: "5px 14px", cursor: ((!user.isAdmin && muted) || !canSend) ? "not-allowed" : "pointer", background: "#001a07", border: `1px solid ${DG}`, color: MG }}>TX</button>
             </div>
           </footer>
         </>
@@ -586,10 +630,13 @@ export default function App() {
               <div style={{ fontSize: 13, color: "#ccffdd", border: `1px solid ${DG}`, padding: "7px 10px", marginBottom: 10, wordBreak: "break-word" }}>{r.msgText}</div>
               <div style={{ fontSize: 11, color: DG, marginBottom: 4 }}>REASON</div>
               <div style={{ fontSize: 13, color: "#ffcc44", marginBottom: 12 }}>{r.reason}</div>
-              {!blocked.includes(r.reportedBtId) && r.reportedBtId !== ADMIN_ID
-                ? <button onClick={() => toggleBlockUser(r.reportedBtId, true)} style={{ fontSize: 12, padding: "5px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, border: "1px solid #550000", color: "#cc2200", background: "#000", fontFamily: "'Courier New',monospace" }}><UserX size={13} />BLOCK OPERATOR</button>
-                : <span style={{ fontSize: 12, color: "#330000", letterSpacing: "0.1em" }}>◈ OPERATOR BLOCKED</span>
-              }
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                {!blocked.includes(r.reportedBtId) && r.reportedBtId !== ADMIN_ID
+                  ? <button onClick={() => toggleBlockUser(r.reportedBtId, true)} style={{ fontSize: 12, padding: "5px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, border: "1px solid #550000", color: "#cc2200", background: "#000", fontFamily: "'Courier New',monospace" }}><UserX size={13} />BLOCK OPERATOR</button>
+                  : <span style={{ fontSize: 12, color: "#330000", letterSpacing: "0.1em" }}>◈ OPERATOR BLOCKED</span>
+                }
+                <button onClick={() => sendAdminCmd('delete_report', { reportId: r._id })} style={{ fontSize: 12, padding: "5px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, border: "none", color: "#666", background: "none", fontFamily: "'Courier New',monospace", transition: "all 0.2s" }}><Trash2 size={13} />DISMISS</button>
+              </div>
             </div>
           ))}
         </main>
