@@ -374,9 +374,9 @@ export default function App() {
           <div style={{ fontSize: 11, color: "#00bb2d", letterSpacing: "0.2em", marginTop: 4 }}>SELECT TARGET ENDPOINT</div>
         </div>
 
-        <div style={{ display: "flex", gap: "16px", width: "100%" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", width: "100%" }}>
           <button onClick={() => { setActiveChannel("general"); setCreds({ id: "", pw: "" }); setErr(""); setScr("login"); }}
-            style={{ flex: 1, textAlign: "left", padding: 24, cursor: "pointer", background: "#001a07", border: `1px solid ${DG}`, color: G, transition: "all 0.2s", boxShadow: "0 4px 15px rgba(0,0,0,0.5)" }}>
+            style={{ flex: "1 1 240px", textAlign: "left", padding: 24, cursor: "pointer", background: "#001a07", border: `1px solid ${DG}`, color: G, transition: "all 0.2s", boxShadow: "0 4px 15px rgba(0,0,0,0.5)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
               <Terminal size={20} style={{ color: "#00bb2d" }} />
               <span style={{ fontSize: 19, fontWeight: "bold", letterSpacing: "0.3em" }}>#GENERAL</span>
@@ -390,7 +390,7 @@ export default function App() {
           </button>
 
           <button onClick={() => { setActiveChannel("ds"); setCreds({ id: "", pw: "" }); setErr(""); setScr("login"); }}
-            style={{ flex: 1, textAlign: "left", padding: 24, cursor: "pointer", background: "#001a07", border: `1px solid ${DG}`, color: G, transition: "all 0.2s", boxShadow: "0 4px 15px rgba(0,0,0,0.5)" }}>
+            style={{ flex: "1 1 240px", textAlign: "left", padding: 24, cursor: "pointer", background: "#001a07", border: `1px solid ${DG}`, color: G, transition: "all 0.2s", boxShadow: "0 4px 15px rgba(0,0,0,0.5)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
               <Terminal size={20} style={{ color: "#00bb2d" }} />
               <span style={{ fontSize: 19, fontWeight: "bold", letterSpacing: "0.3em" }}>#DS_EXCLUSIVE</span>
