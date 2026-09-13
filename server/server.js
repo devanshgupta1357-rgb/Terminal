@@ -16,12 +16,14 @@ const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
+app.set('trust proxy', 1); // Trust first-layer reverse proxies
 
 // --- SECURITY: Rate Limiting ---
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, 
-  max: 10, // Max 10 attempts per IP per 15 minutes
-  message: { error: "TOO MANY LOGIN ATTEMPTS — IP BLOCKED FOR 15 MINUTES" }
+  max: 20, // Increased threshold
+  keyGenerator: (req) => req.body?.id ? req.body.id.toLowerCase().trim() : req.ip,
+  message: { error: "TOO MANY LOGIN ATTEMPTS — ACCOUNT FIREWALLED FOR 15 MINUTES" }
 });
 
 // --- DEPLOYMENT UPDATE: Dynamic CORS ---
