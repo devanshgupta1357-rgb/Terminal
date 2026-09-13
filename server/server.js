@@ -65,7 +65,8 @@ const SFX = ["ALPHA","BETA","GAMMA","DELTA","SIGMA","OMEGA","ZETA","THETA","KAPP
 
 const VALID_BATCHES = {
   bt24cse: 223, bt24csa: 67, bt24csd: 66, bt24csh: 66, bt24ece: 132, bt24eci: 49,
-  bt25cse: 220, bt25csd: 70, bt25csa: 68, bt25csh: 74, bt25ece: 132, bt25eci: 69
+  bt25cse: 220, bt25csd: 70, bt25csa: 68, bt25csh: 74, bt25ece: 132, bt25eci: 69,
+  bt26cse: 220, bt26csd: 70, bt26csa: 68, bt26csh: 74, bt26ece: 132, bt26eci: 69
 };
 
 let TOTAL_USERS = 0;
@@ -76,14 +77,14 @@ Object.entries(VALID_BATCHES).forEach(([prefix, max]) => {
 });
 
 function getUserIndex(id) {
-  const m = id.match(/^(bt2[45][a-z]{3})(\d{3})$/);
+  const m = id.match(/^(bt2[456][a-z]{3})(\d{3})$/);
   if (!m) return -1;
   return BATCH_OFFSETS[m[1]] + (parseInt(m[2], 10) - 1);
 }
 
 const isValid = id => {
   if (id === ADMIN_ID) return true;
-  const m = id.match(/^(bt2[45][a-z]{3})(\d{3})$/);
+  const m = id.match(/^(bt2[456][a-z]{3})(\d{3})$/);
   if (!m) return false;
   const prefix = m[1], num = parseInt(m[2], 10);
   return VALID_BATCHES[prefix] && num >= 1 && num <= VALID_BATCHES[prefix];
